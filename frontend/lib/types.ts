@@ -19,12 +19,12 @@ export type Label = {
   chain: string;
   entity: string;
   entity_type: string;
-  confidence: number;
+  confidence: number | null;
   strength: string;
   source: string;
   source_url?: string | null;
-  source_reliability: number;
-  observed_at: string;
+  source_reliability: number | null;
+  observed_at: string | null;
   fiu_registered?: boolean | null;
   synthetic: boolean;
 };
@@ -89,6 +89,24 @@ export type Case = {
   created_at: string;
   evidence_digest: string;
   analysis: Analysis;
+  assessment?: AttributionAssessment;
+  assessment_digest?: string;
+  analysis_digest?: string;
+};
+export type AttributionAssessment = {
+  leading_vasp: string | null;
+  nearest_vasp: string | null;
+  evidence_state: string;
+  evidence_coverage: string[];
+  supporting_evidence: string[];
+  competing_evidence: string[];
+  limitations: string[];
+  label_profile: { address: string; entity: string; source: string; source_url: string | null; provenance_type: string; numeric_quality_known: boolean; reliability_known: boolean; observation_date_known: boolean; conflict_status: string }[];
+  intelligence_conflicts: { address: string; status: string; assertions: { entity: string; source: string; source_url: string | null }[] }[];
+  counterfactuals: { removed_component: string; counterfactual_leading_vasp: string | null; counterfactual_score: number | null; attribution_changed: boolean | null; became_ambiguous: boolean; became_unsupported: boolean; rounding_indeterminate: boolean; score_basis: string }[];
+  stability: { retained: number; applicable: number; ratio: string | null };
+  next_actions: { priority: number; code: string; recommendation: string; reason: string }[];
+  investigator_summary: string;
 };
 export type CaseSummary = {
   id: string;

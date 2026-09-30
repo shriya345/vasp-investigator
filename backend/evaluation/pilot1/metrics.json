@@ -1,0 +1,201 @@
+{
+  "evaluation_timestamp": "2026-09-30T12:34:29.609430+00:00",
+  "git_commit": "e1bbc8964a1fcf99bcc0686113afec8a841fb1d8",
+  "model_version": "0.1.0",
+  "chain": "ethereum",
+  "sample_seed": 2612026,
+  "dataset": "Somin, ERC-20 Auxiliary Data (Harvard Dataverse), labeled_addresses__enriched.csv",
+  "dataset_reference": "https://doi.org/10.7910/DVN/MBF0GC",
+  "dataset_sha256": "579b42862499032390ea519da5aca00470643ca1c06bdd392f39c9af55e71157",
+  "candidate_count": 15,
+  "attempted_count": 15,
+  "retrieval_success_count": 9,
+  "complete_retrieval_count": 0,
+  "evaluable_count": 5,
+  "partial_evaluable_count": 5,
+  "exclusion_and_failure_reasons": {
+    "expected_transfer_outside_retrieved_evidence": 6
+  },
+  "exclusion_reasons": {
+    "ambiguous_multiple_direct_vasp_entities_in_retrieved_evidence": 4
+  },
+  "actual_api_calls": 55,
+  "cache_hits": 9,
+  "all": {
+    "attempted": 15,
+    "retrieval_success": {
+      "value": 0.6,
+      "numerator": 9,
+      "denominator": 15
+    },
+    "complete_retrieval": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 15
+    },
+    "evaluable": 5,
+    "top1": {
+      "value": 0.2,
+      "numerator": 1,
+      "denominator": 5
+    },
+    "top3": {
+      "value": 0.2,
+      "numerator": 1,
+      "denominator": 5
+    },
+    "nearest": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "hop_mae": {
+      "value": 0.0,
+      "denominator": 1
+    },
+    "median_engine_ms": {
+      "value": 1.99,
+      "denominator": 5
+    },
+    "p95_engine_ms": {
+      "value": 13.509,
+      "denominator": 5
+    },
+    "median_uncached_end_to_end_ms": {
+      "value": 18473.03,
+      "denominator": 12
+    },
+    "p95_uncached_end_to_end_ms": {
+      "value": 54173.858,
+      "denominator": 12
+    },
+    "end_to_end_success": {
+      "value": 0.0667,
+      "numerator": 1,
+      "denominator": 15
+    }
+  },
+  "known_label": {
+    "attempted": 1,
+    "retrieval_success": {
+      "value": 1.0,
+      "numerator": 1,
+      "denominator": 1
+    },
+    "complete_retrieval": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 1
+    },
+    "evaluable": 1,
+    "top1": {
+      "value": 1.0,
+      "numerator": 1,
+      "denominator": 1
+    },
+    "top3": {
+      "value": 1.0,
+      "numerator": 1,
+      "denominator": 1
+    },
+    "nearest": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "hop_mae": {
+      "value": 0.0,
+      "denominator": 1
+    },
+    "median_engine_ms": {
+      "value": 1.99,
+      "denominator": 1
+    },
+    "p95_engine_ms": {
+      "value": 1.99,
+      "denominator": 1
+    },
+    "median_uncached_end_to_end_ms": {
+      "value": 13167.934,
+      "denominator": 1
+    },
+    "p95_uncached_end_to_end_ms": {
+      "value": 13167.934,
+      "denominator": 1
+    },
+    "end_to_end_success": {
+      "value": 1.0,
+      "numerator": 1,
+      "denominator": 1
+    }
+  },
+  "unseen_label": {
+    "attempted": 14,
+    "retrieval_success": {
+      "value": 0.5714,
+      "numerator": 8,
+      "denominator": 14
+    },
+    "complete_retrieval": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 14
+    },
+    "evaluable": 4,
+    "top1": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 4
+    },
+    "top3": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 4
+    },
+    "nearest": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "hop_mae": {
+      "value": null,
+      "denominator": 0
+    },
+    "median_engine_ms": {
+      "value": 4.081,
+      "denominator": 4
+    },
+    "p95_engine_ms": {
+      "value": 13.876,
+      "denominator": 4
+    },
+    "median_uncached_end_to_end_ms": {
+      "value": 23778.125,
+      "denominator": 11
+    },
+    "p95_uncached_end_to_end_ms": {
+      "value": 54920.081,
+      "denominator": 11
+    },
+    "end_to_end_success": {
+      "value": 0.0,
+      "numerator": 0,
+      "denominator": 14
+    }
+  },
+  "specificity": null,
+  "specificity_reason": "Specificity not measured due to lack of independently verified negative ground truth.",
+  "fixture_validation": {
+    "passed": 5,
+    "total": 5
+  },
+  "limitations": [
+    "Published endpoint labels are assertions, not independently verified ownership.",
+    "The source dataset and internal labels share Etherscan provenance.",
+    "GoldRush target history may omit the expected transfer; such cases stay in the attempted denominator.",
+    "Some cases have partial retrieval because the secondary token-transfer endpoint failed; direct-transfer accuracy is conditional on the expected edge being present and does not imply complete wallet history.",
+    "Nearest-VASP accuracy is not measured: an observed direct edge does not establish the nearest service across complete history.",
+    "Hop error is conditional on a predicted path to the expected VASP; missing paths are reported separately.",
+    "The confidence score is not a calibrated probability."
+  ]
+}

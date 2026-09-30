@@ -76,14 +76,14 @@ class Label(StrictModel):
     entity_type: str = Field(
         pattern=r"^(vasp|exchange|mixer|bridge|dex|contract|scam|sanctioned)$"
     )
-    confidence: float = Field(ge=0, le=1)
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
     strength: str = Field(pattern=r"^(strong|probable|weak)$")
     source: str = Field(min_length=1, max_length=300)
     source_url: Optional[str] = Field(
         default=None, max_length=500, pattern=r"^https://"
     )
-    source_reliability: float = Field(ge=0, le=1)
-    observed_at: datetime
+    source_reliability: Optional[float] = Field(default=None, ge=0, le=1)
+    observed_at: Optional[datetime] = None
     # Entity-level regulatory status is separate from address ownership evidence.
     fiu_registered: Optional[bool] = None
     synthetic: bool = False
@@ -105,6 +105,8 @@ class Label(StrictModel):
     @field_validator("observed_at")
     @classmethod
     def dated_source(cls, value):
+        if value is None:
+            return None
         if value.tzinfo is None:
             raise ValueError("observed_at must include timezone")
         return value.astimezone(timezone.utc)

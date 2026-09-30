@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 
-def report(case, routing=None, audit=None):
+def report(case, routing=None, audit=None, related=None):
     a = case["analysis"]
     m = a["metrics"]
     transactions_by_id = {
@@ -42,17 +42,23 @@ def report(case, routing=None, audit=None):
         f"Graph: {len(a['graph']['nodes'])} nodes; {len(a['graph']['edges'])} transfers; tracing limit {a['max_hops']} hops.",
         "",
         "## Ranked VASP candidates",
-        f"Nearest VASP: {nearest['entity']} — {nearest['shortest_hops']} hops; {nearest['score']}/100 confidence."
-        if nearest
-        else "Nearest VASP: none supported.",
-        f"Highest-confidence VASP: {highest['entity']} — {highest['shortest_hops']} hops; {highest['score']}/100 confidence."
-        if highest
-        else "Highest-confidence VASP: none supported.",
+        (
+            f"Nearest VASP: {nearest['entity']} — {nearest['shortest_hops']} hops; {nearest['score']}/100 confidence."
+            if nearest
+            else "Nearest VASP: none supported."
+        ),
+        (
+            f"Highest-confidence VASP: {highest['entity']} — {highest['shortest_hops']} hops; {highest['score']}/100 confidence."
+            if highest
+            else "Highest-confidence VASP: none supported."
+        ),
         a.get(
             "attribution_result",
-            "No VASP attribution supported by available evidence."
-            if not a["candidates"]
-            else "Evidence-supported VASP candidates found.",
+            (
+                "No VASP attribution supported by available evidence."
+                if not a["candidates"]
+                else "Evidence-supported VASP candidates found."
+            ),
         ),
     ]
     for c in a["candidates"]:
@@ -67,7 +73,7 @@ def report(case, routing=None, audit=None):
             for k, v in c["components"].items()
         ]
         lines += [
-            f"- Label inference: {label['address']} → {label['entity']} ({label['entity_type']}, {label['chain']}); {label['strength']}; confidence {label['confidence']}; source reliability {label['source_reliability']}; source: {label['source']}; URL: {label.get('source_url') or 'Not supplied'}; observed {label['observed_at']}; FIU-IND: {('registered' if label.get('fiu_registered') else 'unregistered') if label.get('fiu_registered') is not None else 'unknown — requires manual verification'}"
+            f"- Label inference: {label['address']} → {label['entity']} ({label['entity_type']}, {label['chain']}); {label['strength']}; confidence {label['confidence'] if label['confidence'] is not None else 'unknown'}; source reliability {label['source_reliability'] if label['source_reliability'] is not None else 'unknown'}; source: {label['source']}; URL: {label.get('source_url') or 'Not supplied'}; observed {label['observed_at'] or 'unknown'}; FIU-IND: {('registered' if label.get('fiu_registered') else 'unregistered') if label.get('fiu_registered') is not None else 'unknown — requires manual verification'}"
             for label in c["labels"]
         ]
         for path in c["paths"]:
@@ -85,6 +91,64 @@ def report(case, routing=None, audit=None):
             ]
     if not a["candidates"]:
         lines += ["No VASP attribution supported by available evidence."]
+    assessment = case.get("assessment")
+    if assessment:
+        lines += [
+            "",
+            "## Attribution assessment",
+            f"{'Top-ranked candidate' if assessment['evidence_state'] == 'AMBIGUOUS' else 'Highest-supported VASP'}: {assessment['leading_vasp'] or 'none'}.",
+            f"Nearest VASP: {assessment['nearest_vasp'] or 'none'}.",
+            f"Evidence state: {assessment['evidence_state']}.",
+            f"Evidence coverage: {', '.join(assessment['evidence_coverage'])}.",
+            f"Assessment digest (SHA-256): {case['assessment_digest']}.",
+            f"Analysis digest (SHA-256): {case.get('analysis_digest') or 'not available for this legacy case'}.",
+            assessment["investigator_summary"],
+        ]
+        for title, key in [
+            ("Supporting evidence", "supporting_evidence"),
+            ("Competing evidence", "competing_evidence"),
+            ("Limitations", "limitations"),
+        ]:
+            lines += [f"### {title}"] + [f"- {item}" for item in assessment[key]]
+        lines += ["### Label provenance"]
+        for profile in assessment["label_profile"]:
+            lines += [
+                f"- {profile['address']} — {profile['entity']}; {profile['provenance_type']}; {profile['source']}; {profile['source_url'] or 'URL unavailable'}; numeric quality {'known' if profile['numeric_quality_known'] else 'unknown'}; reliability {'known' if profile['reliability_known'] else 'unknown'}."
+            ]
+        lines += ["### Intelligence conflicts"]
+        for conflict in assessment["intelligence_conflicts"]:
+            lines += [
+                f"- {conflict['address']}: {conflict['status']}; "
+                + "; ".join(
+                    f"{claim['entity']} ({claim['source']}; {claim['source_url'] or 'URL unavailable'})"
+                    for claim in conflict["assertions"]
+                )
+            ]
+        lines += [
+            "### Counterfactual stability",
+            f"Retained attribution: {assessment['stability']['ratio'] or 'no applicable tests'}. Removal of service intelligence does not remove blockchain transfers.",
+            "Component-removal scores use rounded displayed inputs; close rankings are indeterminate at that precision.",
+        ]
+        for scenario in assessment["counterfactuals"]:
+            outcome = (
+                "ranking indeterminate at displayed precision"
+                if scenario.get("rounding_indeterminate")
+                else scenario["counterfactual_leading_vasp"] or "no supported VASP"
+            )
+            changed = (
+                "indeterminate"
+                if scenario.get("rounding_indeterminate")
+                else str(scenario["attribution_changed"])
+            )
+            lines += [
+                f"- Without {scenario['removed_component']}: {outcome}; score {scenario['counterfactual_score'] if scenario['counterfactual_score'] is not None else 'unavailable'}; changed: {changed}."
+            ]
+        lines += ["### Recommended investigative actions"]
+        for action in assessment["next_actions"]:
+            lines += [f"- {action['recommendation']} Reason: {action['reason']}"]
+        lines += [
+            "VASP attribution represents an evidence-supported association based on available blockchain and service-intelligence data. It does not independently establish wallet ownership, account ownership, identity, or criminal liability."
+        ]
     lines += ["", f"## Risk indicators — {a['risk']['score']}/100"]
     for r in a["risk"]["factors"]:
         lines += [
@@ -134,6 +198,21 @@ def report(case, routing=None, audit=None):
         lines += [
             "This case predates the audit trail. Earlier events were not backfilled."
         ]
+    if related is not None:
+        lines += [
+            "",
+            "## Related local cases",
+            "Shared observed graph addresses only; no ownership, identity or criminal association is inferred.",
+        ]
+        if not case.get("analysis_digest"):
+            lines += [
+                "Cross-case links unavailable: this case predates analysis-output sealing."
+            ]
+        else:
+            lines += [
+                f"- {link['case_id']}: {link['relationship']} at {link['address']}."
+                for link in related
+            ] or ["No shared sealed-case outgoing/path addresses observed."]
     lines += [
         "Hash chaining supports tamper-evident integrity checks; it does not establish legal admissibility or authenticate external evidence."
     ]

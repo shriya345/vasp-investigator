@@ -1,8 +1,8 @@
 """
 GoldRush (Covalent) blockchain history provider.
 
-Fetches native transfers and ERC-20/BEP-20 token transfers for an address,
-normalizes into the existing Transaction model.
+Fetches recent native transfers and decoded ERC-20/BEP-20 transfer logs for an
+address, normalizes into the existing Transaction model.
 
 API docs: https://goldrush.dev/docs/
 Chain names: eth-mainnet, bsc-mainnet
@@ -23,9 +23,9 @@ GOLDRUSH_CHAIN_NAMES = {
     Chain.ethereum: "eth-mainnet",
     Chain.bnb: "bsc-mainnet",
 }
-# Limit pages fetched per request to keep response times reasonable for demo
+# Limit pages fetched per request to keep response times reasonable for demo.
+# The returned history is a recent window, not a complete wallet history.
 MAX_PAGES = 5
-PAGE_SIZE = 100
 RETRY_DELAYS = [1, 2, 4]
 
 
@@ -49,14 +49,16 @@ def _goldrush_request(path: str, params: Optional[dict] = None) -> dict:
                 # Rate limited — always retry
                 time.sleep(delay or 5)
                 continue
+            # Bad requests cannot be repaired by retrying the same parameters.
+            if 500 <= resp.status_code < 600 and attempt < len(RETRY_DELAYS):
+                continue
             resp.raise_for_status()
             body = resp.json()
             if body.get("error"):
                 raise ValueError(f"GoldRush API error: {body.get('error_message', 'unknown')}")
             return body.get("data", {})
-        except httpx.HTTPStatusError as exc:
-            if attempt == len(RETRY_DELAYS):
-                raise
+        except httpx.HTTPStatusError:
+            raise
     raise ValueError("GoldRush request failed after retries")
 
 
@@ -102,11 +104,8 @@ class GoldRushProvider:
         transactions: list[Transaction] = []
         seen_ids: set[str] = set()
 
-        # Fetch paginated transactions (includes native ETH/BNB transfers + decoded log events)
+        # Fetch recent native transactions and decoded token-transfer logs.
         self._fetch_transactions(target, chain, chain_name, transactions, seen_ids)
-
-        # Fetch ERC-20/BEP-20 token transfers separately for completeness
-        self._fetch_token_transfers(target, chain, chain_name, transactions, seen_ids)
 
         # Sort by block/tx ordering deterministically
         transactions.sort(key=lambda t: (
@@ -127,13 +126,14 @@ class GoldRushProvider:
         out: list[Transaction],
         seen: set[str],
     ):
-        """Fetch native/ETH transaction history page by page."""
-        for page in range(MAX_PAGES):
+        """Fetch the latest page and up to four preceding pages."""
+        page = None
+        for _ in range(MAX_PAGES):
             try:
-                data = _goldrush_request(
-                    f"/{chain_name}/address/{target}/transactions_v3/page/{page}/",
-                    params={"no-logs": "false"},
-                )
+                path = f"/{chain_name}/address/{target}/transactions_v3/"
+                if page is not None:
+                    path += f"page/{page}/"
+                data = _goldrush_request(path, params={"no-logs": "false"})
             except Exception:
                 break
 
@@ -144,9 +144,12 @@ class GoldRushProvider:
             for item in items:
                 self._normalize_tx(item, target, chain, out, seen)
 
-            # GoldRush v3: check pagination via links
-            if not data.get("links", {}).get("next"):
+            # The unnumbered URL starts at the most recent page. Page zero is
+            # the oldest; walk backward using the returned page number.
+            current_page = data.get("current_page")
+            if not isinstance(current_page, int) or current_page <= 0:
                 break
+            page = current_page - 1
 
     def _normalize_tx(self, item: dict, target: str, chain: Chain, out: list, seen: set):
         """Normalize a single transaction item (native transfer)."""
@@ -275,93 +278,3 @@ class GoldRushProvider:
             ))
         except Exception:
             pass
-
-    def _fetch_token_transfers(
-        self,
-        target: str,
-        chain: Chain,
-        chain_name: str,
-        out: list[Transaction],
-        seen: set[str],
-    ):
-        """
-        Fetch ERC-20 token transfers directly (catches transfers not
-        appearing in the transactions endpoint log events).
-        """
-        # GoldRush ERC-20 transfers endpoint
-        try:
-            data = _goldrush_request(
-                f"/{chain_name}/address/{target}/transfers_v2/",
-                params={"page-size": str(PAGE_SIZE)},
-            )
-        except Exception:
-            return
-
-        items = data.get("items") or []
-        for item in items:
-            tx_hash = (item.get("tx_hash") or "").lower()
-            if not tx_hash or len(tx_hash) != 66:
-                continue
-            if not item.get("successful", True):
-                continue
-
-            block_number = item.get("block_height") or 0
-            tx_index = item.get("tx_offset") or 0
-            ts = _parse_timestamp(item.get("block_signed_at"))
-            if ts is None:
-                continue
-
-            for transfer in (item.get("transfers") or []):
-                from_addr = (transfer.get("from_address") or "").lower()
-                to_addr = (transfer.get("to_address") or "").lower()
-                contract_addr = (transfer.get("contract_address") or "").lower()
-                symbol = transfer.get("contract_ticker_symbol") or "TOKEN"
-                decimals = transfer.get("contract_decimals") or 18
-                delta = transfer.get("delta") or transfer.get("amount")
-                usd_quote = transfer.get("delta_quote") or transfer.get("quote")
-
-                if not from_addr or not to_addr or not contract_addr or not delta:
-                    continue
-                if from_addr == to_addr:
-                    continue
-                if not (len(contract_addr) == 42 and contract_addr.startswith("0x")):
-                    continue
-
-                try:
-                    raw = Decimal(str(delta))
-                    if raw <= 0:
-                        continue
-                    amount = raw / Decimal(10) ** int(decimals)
-                    if amount <= 0:
-                        continue
-                except (InvalidOperation, ValueError):
-                    continue
-
-                # Use log_offset for deduplication with the tx endpoint
-                log_offset = transfer.get("log_offset") or 0
-                evidence_id = f"{chain.value}:{tx_hash}:{log_offset + 1}"
-                if evidence_id in seen:
-                    continue
-                seen.add(evidence_id)
-
-                usd = _safe_decimal(usd_quote) if usd_quote else None
-                try:
-                    out.append(Transaction(
-                        tx_hash=tx_hash,
-                        event_index=log_offset + 1,
-                        chain=chain,
-                        block_number=int(block_number),
-                        transaction_index=int(tx_index),
-                        timestamp=ts,
-                        from_address=from_addr,
-                        to_address=to_addr,
-                        asset=symbol[:20],
-                        amount=str(amount),
-                        usd_value=str(usd) if usd is not None else None,
-                        contract_address=contract_addr,
-                        transaction_type="token",
-                        source="GoldRush API (Covalent); ERC-20 transfers_v2",
-                        source_confidence=0.90,
-                    ))
-                except Exception:
-                    pass

@@ -1,0 +1,57 @@
+{
+  "title": "Controlled Functional Fixture Validation",
+  "passed": 5,
+  "total": 5,
+  "cases": [
+    {
+      "fixture": "01_strong_vasp.json",
+      "expected_behavior": "Binance at 2 hops",
+      "passed": true,
+      "nearest_vasp": "Binance",
+      "highest_confidence_vasp": "Binance",
+      "nearest_hops": 2,
+      "no_attribution": false,
+      "runtime_ms": 0.317
+    },
+    {
+      "fixture": "02_mixed_flow.json",
+      "expected_behavior": "Coinbase and Kraken both direct; no unique required winner",
+      "passed": true,
+      "nearest_vasp": "Coinbase",
+      "highest_confidence_vasp": "Coinbase",
+      "nearest_hops": 1,
+      "no_attribution": false,
+      "runtime_ms": 0.115
+    },
+    {
+      "fixture": "03_mixer_risk.json",
+      "expected_behavior": "Binance candidate plus mixer exposure",
+      "passed": true,
+      "nearest_vasp": "Binance",
+      "highest_confidence_vasp": "Binance",
+      "nearest_hops": 1,
+      "no_attribution": false,
+      "runtime_ms": 0.125
+    },
+    {
+      "fixture": "04_dex_flow.json",
+      "expected_behavior": "DEX boundary and no VASP candidate",
+      "passed": true,
+      "nearest_vasp": null,
+      "highest_confidence_vasp": null,
+      "nearest_hops": null,
+      "no_attribution": true,
+      "runtime_ms": 0.053
+    },
+    {
+      "fixture": "05_unknown.json",
+      "expected_behavior": "No VASP attribution",
+      "passed": true,
+      "nearest_vasp": null,
+      "highest_confidence_vasp": null,
+      "nearest_hops": null,
+      "no_attribution": true,
+      "runtime_ms": 0.082
+    }
+  ]
+}

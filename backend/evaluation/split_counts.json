@@ -1,0 +1,66 @@
+{
+  "Binance": {
+    "operational": 40,
+    "held_out": 17
+  },
+  "Bitfinex": {
+    "operational": 28,
+    "held_out": 12
+  },
+  "Bithumb": {
+    "operational": 13,
+    "held_out": 5
+  },
+  "Bitstamp": {
+    "operational": 6,
+    "held_out": 3
+  },
+  "Bittrex": {
+    "operational": 3,
+    "held_out": 1
+  },
+  "Coinbase": {
+    "operational": 17,
+    "held_out": 8
+  },
+  "Crypto.com": {
+    "operational": 15,
+    "held_out": 6
+  },
+  "Gemini": {
+    "operational": 9,
+    "held_out": 4
+  },
+  "HitBTC": {
+    "operational": 4,
+    "held_out": 2
+  },
+  "Hotbit": {
+    "operational": 3,
+    "held_out": 1
+  },
+  "Huobi": {
+    "operational": 59,
+    "held_out": 26
+  },
+  "Kraken": {
+    "operational": 13,
+    "held_out": 5
+  },
+  "KuCoin": {
+    "operational": 14,
+    "held_out": 6
+  },
+  "OKX": {
+    "operational": 18,
+    "held_out": 8
+  },
+  "Poloniex": {
+    "operational": 14,
+    "held_out": 6
+  },
+  "Upbit": {
+    "operational": 3,
+    "held_out": 1
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "controlled_fixtures": {"passed": 5, "total": 5},
+  "backend_tests": {"passed": 39, "total": 39, "key_free_environment": true},
+  "browser_tests": {"passed": 4, "total": 4},
+  "typescript_check": "passed",
+  "frontend_production_build": "passed",
+  "changed_file_python_lint": "passed",
+  "git_diff_check": "passed",
+  "repository_wide_python_lint": {"status": "15 pre-existing issues in untouched files", "files": ["app/main.py", "app/storage.py", "tests/test_scope.py"]}
+}

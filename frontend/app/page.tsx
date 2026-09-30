@@ -82,6 +82,8 @@ export default function Dashboard() {
     [showCases, setShowCases] = useState(false);
   const [routing, setRouting] = useState<Routing | null>(null);
   const [audit, setAudit] = useState<Audit | null>(null);
+  const [related, setRelated] = useState<{ case_id: string; address: string; relationship: string }[]>([]);
+  const [relatedError, setRelatedError] = useState(false);
   const [threshold, setThreshold] = useState<number | null>(null);
   const [caseReference, setCaseReference] = useState("");
   const [agency, setAgency] = useState("");
@@ -129,6 +131,9 @@ export default function Dashboard() {
     api<Audit>(`/api/cases/${current.id}/audit`)
       .then(setAudit)
       .catch((e) => setError((e as Error).message));
+    api<{ links: { case_id: string; address: string; relationship: string }[] }>(`/api/cases/${current.id}/related`)
+      .then((data) => { setRelated(data.links); setRelatedError(false); })
+      .catch(() => { setRelated([]); setRelatedError(true); });
     api<{ minimum_score: number }>("/api/simulation-policy")
       .then((data) => setThreshold(data.minimum_score))
       .catch((e) => setError((e as Error).message));
@@ -142,6 +147,8 @@ export default function Dashboard() {
     setChain(c.analysis.chain);
     setRouting(null);
     setAudit(null);
+    setRelated([]);
+    setRelatedError(false);
     setCaseReference("");
     setAgency("");
     setAuthorized(false);
@@ -418,9 +425,9 @@ export default function Dashboard() {
               </a>
             )}
             <span>
-              Address {l.address} · Observed {time(l.observed_at)} · Label
-              confidence {l.confidence * 100}% · Reliability{" "}
-              {l.source_reliability * 100}% · FIU-IND{" "}
+              Address {l.address} · Observed {l.observed_at ? time(l.observed_at) : "unknown"} · Label
+              confidence {l.confidence == null ? "unknown" : `${l.confidence * 100}%`} · Reliability{" "}
+              {l.source_reliability == null ? "unknown" : `${l.source_reliability * 100}%`} · FIU-IND{" "}
               {l.fiu_registered == null
                 ? "unknown — manual verification required"
                 : l.fiu_registered
@@ -947,6 +954,23 @@ export default function Dashboard() {
                   <p>No VASP attribution supported by available evidence.</p>
                 )}
               </div>
+              {current?.assessment && (
+                <section className="card" aria-label="Attribution assessment">
+                  <h2>Attribution assessment</h2>
+                  <p><strong>Evidence state:</strong> {current.assessment.evidence_state.replaceAll("_", " ")}</p>
+                  <p><strong>Coverage:</strong> {current.assessment.evidence_coverage.map(s => s.replaceAll("_", " ")).join(" · ")}</p>
+                  <p><strong>{current.assessment.evidence_state === "AMBIGUOUS" ? "Top-ranked candidate:" : "Highest-supported VASP:"}</strong> {current.assessment.leading_vasp || "None"} · <strong>Nearest VASP:</strong> {current.assessment.nearest_vasp || "None"}</p>
+                  <p><strong>Stability:</strong> {current.assessment.stability.ratio || "No applicable tests"} evidence-removal tests retained the leading candidate without a tie.</p>
+                  <p>{current.assessment.investigator_summary}</p>
+                  <details><summary>Why this VASP?</summary>{current.assessment.supporting_evidence.map((item, i) => <p key={i}>{item}</p>)}</details>
+                  <details><summary>What weakens this conclusion?</summary>{current.assessment.competing_evidence.concat(current.assessment.limitations).map((item, i) => <p key={i}>{item}</p>)}</details>
+                  <details><summary>Evidence sources</summary>{current.assessment.label_profile.map(p => <p key={p.address}>{short(p.address)} · {p.entity} · {p.provenance_type} · {p.source_url ? <a href={p.source_url} target="_blank" rel="noreferrer">{p.source}</a> : <span>{p.source} (URL unavailable)</span>} · numeric quality {p.numeric_quality_known ? "known" : "unknown"}</p>)}</details>
+                  <details><summary>What if evidence changes?</summary><p>Component-removal scores use rounded displayed inputs; close rankings are indeterminate. Removing a service label leaves blockchain transfers intact.</p>{current.assessment.counterfactuals.map(c => <p key={c.removed_component}>Without {c.removed_component.replaceAll("_", " ")}: {c.rounding_indeterminate ? "ranking indeterminate at displayed precision" : c.counterfactual_leading_vasp || "no supported VASP"} · score {c.counterfactual_score ?? "unavailable"}</p>)}</details>
+                  <details><summary>Intelligence conflicts</summary>{current.assessment.intelligence_conflicts.length ? current.assessment.intelligence_conflicts.map(c => <p key={c.address}>{short(c.address)}: {c.assertions.map(a => a.entity).join(" / ")} — unresolved entity conflict</p>) : <p>None observed in the loaded assertions.</p>}</details>
+                  <details><summary>Recommended next investigative action</summary>{current.assessment.next_actions.map(a => <p key={a.code}>{a.recommendation} {a.reason}</p>)}</details>
+                  <details><summary>Related local cases</summary>{!current.analysis_digest ? <p>Unavailable for this older case because its analysis was not sealed.</p> : relatedError ? <p>Links unavailable. Check the case audit integrity result.</p> : related.length ? related.map(link => <p key={`${link.case_id}-${link.address}`}>{link.case_id}: {link.relationship} at {short(link.address)}</p>) : <p>No shared sealed-case outgoing or supported-path addresses observed.</p>}<p>Shared addresses do not establish ownership, identity, or criminal association.</p></details>
+                </section>
+              )}
               <nav className="tabs" aria-label="Investigation views">
                 {tabs.map((t) => (
                   <button

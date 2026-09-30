@@ -1,5 +1,5 @@
 """
-Load curated label JSON files from backend/data/labels/ at startup.
+Load curated and operational public label JSON files from backend/data/labels/.
 Returns a list of Label objects for a given chain.
 """
 
@@ -14,6 +14,7 @@ DATA_DIR = Path(__file__).parent.parent / "data" / "labels"
 LABEL_FILES = {
     Chain.ethereum: [
         "ethereum_vasps.json",
+        "ethereum_public_cex.json",
         "mixers.json",
         "bridges.json",
         "dex.json",

@@ -15,3 +15,17 @@ test-results/
 
 .ruff_cache/
 .vscode/
+
+# External evaluation inputs and public API response cache
+backend/evaluation/raw/
+backend/evaluation/cache/
+
+# Locally regenerated address-level derivatives of the Harvard Dataverse source.
+# File-level redistribution rights have not been independently verified.
+backend/data/labels/ethereum_public_cex.json
+backend/evaluation/*.csv
+backend/evaluation/pilot*/*.csv
+backend/evaluation/label_split.json
+backend/evaluation/label_conflicts.json
+backend/evaluation/dataset_quality.json
+backend/evaluation/pilot*/dataset_quality.json

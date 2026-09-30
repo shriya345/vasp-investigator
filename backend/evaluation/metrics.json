@@ -1,0 +1,144 @@
+{
+  "title": "Final frozen Ethereum real-world evaluation",
+  "evaluated_at": "2026-09-30T15:28:44.879784+00:00",
+  "freeze_sha256": "3ff4123d09a608e5370e4b00cc69a50ca60f5a75577aa3d4528d40e87aa481e7",
+  "final_cases_sha256": "04e75a723b43833d760b3de9e7e8039bd2a92e5b1ba84b18931723a3e3787654",
+  "dataset_sha256": "579b42862499032390ea519da5aca00470643ca1c06bdd392f39c9af55e71157",
+  "model_version": "0.1.0",
+  "attempted": 150,
+  "case_status_counts": {
+    "expected_transfer_missing": 26,
+    "evaluable": 72,
+    "ambiguous": 49,
+    "ground_truth_conflict": 1,
+    "analysis_failure": 1,
+    "provider_failure": 1
+  },
+  "expected_transfer_retrieval": {
+    "numerator": 123,
+    "denominator": 150,
+    "percentage": 82.0
+  },
+  "evaluable_rate": {
+    "numerator": 72,
+    "denominator": 150,
+    "percentage": 48.0
+  },
+  "end_to_end_top1": {
+    "numerator": 49,
+    "denominator": 150,
+    "percentage": 32.67
+  },
+  "operational": {
+    "attempted": 105,
+    "evaluable": 48,
+    "top1": {
+      "numerator": 48,
+      "denominator": 48,
+      "percentage": 100.0
+    },
+    "top3": {
+      "numerator": 48,
+      "denominator": 48,
+      "percentage": 100.0
+    },
+    "direct_hop_accuracy": {
+      "numerator": 48,
+      "denominator": 48,
+      "percentage": 100.0
+    },
+    "hop_mae": {
+      "value": 0.0,
+      "denominator": 48
+    },
+    "median_engine_ms": {
+      "value": 1.734,
+      "denominator": 48
+    },
+    "p95_engine_ms": {
+      "value": 9.112,
+      "denominator": 48
+    }
+  },
+  "held_out": {
+    "attempted": 45,
+    "evaluable": 24,
+    "top1": {
+      "numerator": 1,
+      "denominator": 24,
+      "percentage": 4.17
+    },
+    "top3": {
+      "numerator": 1,
+      "denominator": 24,
+      "percentage": 4.17
+    },
+    "direct_hop_accuracy": {
+      "numerator": 1,
+      "denominator": 24,
+      "percentage": 4.17
+    },
+    "hop_mae": {
+      "value": 0.0,
+      "denominator": 1
+    },
+    "median_engine_ms": {
+      "value": 0.756,
+      "denominator": 24
+    },
+    "p95_engine_ms": {
+      "value": 8.298,
+      "denominator": 24
+    }
+  },
+  "held_out_categories": {
+    "reached_endpoint_not_identified": 16,
+    "reached_endpoint_no_supported_attribution": 23,
+    "same_entity_via_other_known_endpoint": 1,
+    "expected_evidence_not_retrieved": 5
+  },
+  "actual_api_request_wrapper_calls": 327,
+  "cache_hits": 48,
+  "evaluation_runtime_seconds": 1509.214,
+  "nearest_vasp_accuracy": null,
+  "real_world_specificity": null,
+  "real_world_precision": null,
+  "real_world_recall": null,
+  "real_world_f1": null,
+  "negative_ground_truth_note": "Real-world specificity, precision, recall, and F1 were not measured because independently verified negative ground truth was unavailable.",
+  "candidate_pool_count": 220,
+  "vasps_represented": 16,
+  "operational_attempted": 105,
+  "held_out_attempted": 45,
+  "ambiguity_rate": {
+    "numerator": 49,
+    "denominator": 150,
+    "percentage": 32.67
+  },
+  "provider_failure_rate": {
+    "numerator": 1,
+    "denominator": 150,
+    "percentage": 0.67
+  },
+  "ground_truth_conflict_count": 1,
+  "other_exclusion_count": 1,
+  "operational_end_to_end_top1": {
+    "numerator": 48,
+    "denominator": 105,
+    "percentage": 45.71
+  },
+  "held_out_end_to_end_top1": {
+    "numerator": 1,
+    "denominator": 45,
+    "percentage": 2.22
+  },
+  "discovery_api_request_wrapper_calls": 213,
+  "total_api_request_wrapper_calls": 540,
+  "total_cache_hits": 102,
+  "results_sha256": "9332e1706ba2c7dc31e8cbc182fde8297a83bc5e68a5238009d20f68a680c603",
+  "derived_metrics_note": "These additional ratios and counts were calculated from immutable final results.csv after evaluation; frozen predictions and case selection were not changed.",
+  "operational_evaluable_zero_score_count": 44,
+  "operational_evaluable_positive_score_count": 4,
+  "score_interpretation": "Top-1/Top-3 evaluate entity rank, not calibrated confidence. Public labels lack numeric quality, so 44 of 48 correct operational candidates are score 0 under the conservative quality cap. All 48 operational evaluable cases had only one ranked candidate, so these cases do not test multi-candidate rank discrimination.",
+  "operational_evaluable_single_candidate_count": 48
+}

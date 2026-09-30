@@ -1,6 +1,5 @@
 """Focused tests for the SIH scope without real-wallet validation claims."""
 
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -239,6 +238,7 @@ def test_live_classification_and_retrieval_event(tmp_path, monkeypatch):
     from app import main
 
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/live.db")
+    monkeypatch.setenv("GOLDRUSH_API_KEY", "test-only")
     source = fixture("02_mixed_flow.json")
     monkeypatch.setattr(
         main.GoldRushProvider,

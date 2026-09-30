@@ -64,7 +64,7 @@ cd frontend && npm run dev
 
 ### Live investigation
 
-Enter any Ethereum or BNB Chain wallet address and click **Investigate live**. The backend fetches real transaction history from GoldRush (Covalent), applies the curated VASP/risk label dataset, and runs the trace engine.
+Enter any Ethereum or BNB Chain wallet address and click **Investigate live**. The backend fetches a bounded recent transaction history from GoldRush (Covalent), applies the available VASP/risk labels, and runs the trace engine.
 
 Requires a GoldRush API key. Create a free account at https://goldrush.dev, then add the key to `backend/.env`:
 
@@ -87,11 +87,12 @@ Use the sidebar's **Import evidence** button to load a pre-built investigation p
 ## What's implemented
 
 ### Blockchain ingestion
-- GoldRush (Covalent) provider: paginated native + ERC-20/BEP-20 transfers for Ethereum and BNB Chain, with retry/backoff and failed-transaction filtering.
+- GoldRush (Covalent) provider: up to five recent transaction pages with native transfers and decoded ERC-20/BEP-20 Transfer logs for Ethereum and BNB Chain, with retry/backoff and failed-transaction filtering.
 - Normalized evidence contracts (chain, block ordering, contract-based token identity, duplicate-event rejection, timezone validation).
 
 ### VASP / risk label dataset
 - 18 sourced Ethereum VASP address labels: Binance, Coinbase, Kraken, OKX, Bybit, KuCoin — sourced from Etherscan labels.
+- For locally reproduced evaluation only, a deterministic operational subset of published Ethereum CEX endpoints can add 243 non-curated labels across 16 entities; 111 endpoints were held out in the recorded benchmark. The derived address file is **not distributed** in this public repository because file-level redistribution rights were not verified. A fresh clone runs with the independently curated labels above. See [evaluation methodology](backend/evaluation/README.md).
 - 5 BNB Chain VASP addresses sourced from BscScan labels.
 - 5 Tornado Cash pool addresses (OFAC SDN-listed).
 - Polygon, Optimism, Avalanche bridges.
@@ -132,7 +133,13 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Backend tests (32): engine correctness (conservation, ordering, contracts, dilution, boundaries, hop limits, label quality, cycles, complexity budget) and full API lifecycle. Frontend build and type-check run in CI. Browser tests cover demo analysis, candidate selection, graph filtering, evidence inspection, report download, imported no-evidence cases, persistence, and mobile viewport.
+Backend tests cover engine correctness (conservation, ordering, contracts, dilution, boundaries, hop limits, label quality, cycles, complexity budget), provider pagination, label handling, and full API lifecycle. Frontend build and type-check run in CI. Browser tests cover demo analysis, candidate selection, graph filtering, evidence inspection, report download, imported no-evidence cases, persistence, and mobile viewport.
+
+## Ethereum evaluation
+
+The [frozen real-world evaluation](backend/evaluation/EVALUATION_SUMMARY.md) attempted 150 observed direct-transfer cases across 16 published CEX entities from a 220-case candidate pool. Conditional operational Top-1 was 48/48 among retrieved, unambiguous, conflict-free known-endpoint cases; all-case end-to-end Top-1 was 49/150. See the [methodology and limitations](backend/evaluation/README.md) before citing either number. These results do not establish wallet ownership or performance on arbitrary Ethereum wallets.
+
+Publication policy: Tracepoint does not redistribute the underlying **ERC-20 Auxiliary Data** by **Shahar Somin** or its address-level derivatives. To reproduce the evaluation locally, obtain `labeled_addresses__enriched.csv` yourself from the original publisher at [Harvard Dataverse DOI 10.7910/DVN/MBF0GC](https://doi.org/10.7910/DVN/MBF0GC), then follow the [local dataset setup](backend/evaluation/README.md#local-dataset-setup-and-publication-policy). Raw data, derived labels, case manifests, per-case results, caches, and credentials remain uncommitted. Published benchmark figures are aggregate historical results; the exact frozen per-case replay requires locally retained excluded artifacts and the recorded pre-commit Git state.
 
 ## Project structure
 
@@ -209,6 +216,10 @@ Attribution scores are uncalibrated evidence scores, not ownership probabilities
 The evidence digest and append-only application audit chain support tamper-evident evidence integrity / chain-of-custody review. Hashing alone does not authenticate external evidence or make it legally admissible. Existing cases display a legacy notice rather than fabricated earlier audit events. Database administrators could still replace an entire trail; this is not a production immutable log. SQLite files and `.env` are excluded from Git.
 
 See [methodology](docs/METHODOLOGY.md) for the full model description and limitations.
+
+The separate [baseline evaluation](backend/evaluation/README.md) measures the unchanged engine against published Ethereum exchange labels and observed transfers; its five controlled fixtures are reported separately from real-world cases. Results are conditional on retrieved evidence and disclosed label overlap.
+
+The post-baseline attribution assessment adds an evidence state, explicit coverage limits, source profiles and conflicts, deterministic evidence-removal sensitivity tests, and prioritized investigative next steps. It leaves the engine's scoring and the frozen benchmark unchanged. Separate analysis and assessment SHA-256 digests are anchored to the case audit event. The related-cases view compares shared outgoing or supported-path addresses among locally saved cases with verified analysis seals, without claiming shared ownership or identity. See [assessment methodology](docs/METHODOLOGY.md#post-baseline-evidence-assessment) for exact rules and limitations.
 
 ## Framework references
 

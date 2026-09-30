@@ -176,7 +176,8 @@ def _analyze(request: InvestigationRequest, transactions, labels):
         last = max(t.timestamp for t in txs if t.evidence_id in terminal_ids)
         age = (reference - last).total_seconds() / 86400 if reference else 0
         quality = min(
-            label_map[a].confidence * label_map[a].source_reliability for a in addresses
+            (label_map[a].confidence or 0) * (label_map[a].source_reliability or 0)
+            for a in addresses
         )
         quality *= min(lot["confidence"] for _, lot in records)
         components = {

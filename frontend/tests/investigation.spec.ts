@@ -70,6 +70,18 @@ test("imported empty case produces no fabricated candidate", async ({
   await expect(page.getByText("IMPORT", { exact: true })).toBeVisible();
 });
 
+test("assessment explains the demo conclusion and counterfactual", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo investigation" }).click();
+  const card = page.getByRole("region", { name: "Attribution assessment" });
+  await expect(card).toContainText("Top-ranked candidate: Binance (demo)");
+  await expect(card).toContainText("Evidence state: AMBIGUOUS");
+  await card.getByText("What if evidence changes?").click();
+  await expect(card).toContainText("Without leading endpoint service intelligence");
+  await card.getByText("Recommended next investigative action").click();
+  await expect(card).toContainText("Investigate the transaction paths to competing VASP endpoints");
+});
+
 test("mobile dashboard remains navigable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

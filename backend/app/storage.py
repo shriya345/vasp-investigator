@@ -37,9 +37,9 @@ class CaseStore:
         url = url or os.getenv("DATABASE_URL", "sqlite:///./investigations.db")
         self.engine = create_engine(
             url,
-            connect_args={"check_same_thread": False}
-            if url.startswith("sqlite")
-            else {},
+            connect_args=(
+                {"check_same_thread": False} if url.startswith("sqlite") else {}
+            ),
         )
         Base.metadata.create_all(self.engine)
 
@@ -52,6 +52,10 @@ class CaseStore:
         ).hexdigest()
         if actual_digest != digest or case.payload["evidence_digest"] != digest:
             raise ValueError("Evidence digest verification failed; append blocked.")
+        if not self._assessment_valid(case.payload):
+            raise ValueError("Assessment digest verification failed; append blocked.")
+        if not self._analysis_valid(case.payload):
+            raise ValueError("Analysis digest verification failed; append blocked.")
         existing = session.scalars(
             select(AuditRecord)
             .where(AuditRecord.case_id == case_id)
@@ -59,6 +63,25 @@ class CaseStore:
         ).all()
         if not verify([record.payload for record in existing], case_id, digest):
             raise ValueError("Audit hash chain verification failed; append blocked.")
+        if (
+            case.payload.get("audit_initialized", False)
+            and self._anchor(case.payload)
+            and not any(
+                record.payload["action"] == "analysis_executed"
+                and record.payload.get("reference") == self._anchor(case.payload)
+                for record in existing
+            )
+            and action
+            not in {
+                "case_created",
+                "live_evidence_retrieved",
+                "live_acquisition_attempted",
+                "analysis_executed",
+            }
+        ):
+            raise ValueError(
+                "Assessment audit anchor verification failed; append blocked."
+            )
         previous = existing[-1] if existing else None
         event = make_event(
             case_id,
@@ -71,7 +94,7 @@ class CaseStore:
         session.flush()
         return event
 
-    def save(self, case, *, live=False):
+    def save(self, case, *, live=False, evidence_observed=True):
         with Session(self.engine) as session, session.begin():
             session.add(
                 CaseRecord(id=case["id"], created_at=case["created_at"], payload=case)
@@ -82,17 +105,63 @@ class CaseStore:
                 self._append(
                     session,
                     case["id"],
-                    "live_evidence_retrieved",
+                    (
+                        "live_evidence_retrieved"
+                        if evidence_observed
+                        else "live_acquisition_attempted"
+                    ),
                     case["evidence_digest"],
                 )
             self._append(
-                session, case["id"], "analysis_executed", case["evidence_digest"]
+                session,
+                case["id"],
+                "analysis_executed",
+                case["evidence_digest"],
+                self._anchor(case),
             )
 
     def get(self, case_id):
         with Session(self.engine) as session:
             record = session.get(CaseRecord, case_id)
             return record.payload if record else None
+
+    @staticmethod
+    def _assessment_valid(payload):
+        if "assessment_digest" not in payload:
+            return "assessment" not in payload
+        return (
+            sha256(
+                json.dumps(
+                    payload.get("assessment"), sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            == payload["assessment_digest"]
+        )
+
+    @staticmethod
+    def _analysis_valid(payload):
+        if "analysis_digest" not in payload:
+            return True  # Existing cases have no analysis seal; do not backfill one.
+        return (
+            sha256(
+                json.dumps(
+                    payload.get("analysis"), sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            == payload["analysis_digest"]
+        )
+
+    @staticmethod
+    def _anchor(payload):
+        assessment_digest = payload.get("assessment_digest")
+        if not assessment_digest:
+            return None
+        analysis_digest = payload.get("analysis_digest")
+        return (
+            sha256((analysis_digest + assessment_digest).encode()).hexdigest()
+            if analysis_digest
+            else assessment_digest
+        )
 
     def list(self):
         with Session(self.engine) as session:
@@ -111,6 +180,74 @@ class CaseStore:
                 for r in records
             ]
 
+    def related(self, case_id):
+        """Shared supported-path nodes or direct outgoing counterparties only."""
+
+        def linkable(analysis):
+            target = analysis["target"]
+            transfers = {tx["id"]: tx for tx in analysis["transactions"]}
+            outgoing = {
+                tx["to_address"]
+                for tx in transfers.values()
+                if tx["from_address"] == target and tx["to_address"] != target
+            }
+            kinds = {address: "shared outgoing counterparty" for address in outgoing}
+            for candidate in analysis["candidates"]:
+                for path in candidate["paths"]:
+                    addresses = [
+                        transfers[event]["to_address"]
+                        for event in path
+                        if event in transfers
+                    ]
+                    for address in addresses[:-1]:
+                        if address != target:
+                            kinds[address] = "shared intermediary address"
+                    if addresses:
+                        kinds[addresses[-1]] = "shared VASP endpoint"
+            return kinds
+
+        with Session(self.engine) as session:
+            source = session.get(CaseRecord, case_id)
+            if source is None:
+                raise KeyError("Case not found")
+            if not source.payload.get("analysis_digest"):
+                return []
+            if not self.audit(case_id)["valid"]:
+                raise ValueError(
+                    "Case integrity verification failed; links unavailable."
+                )
+            source_analysis = source.payload["analysis"]
+            source_nodes = linkable(source_analysis)
+            links = []
+            for other in session.scalars(
+                select(CaseRecord).where(CaseRecord.id != case_id)
+            ):
+                if (
+                    not other.payload.get("analysis_digest")
+                    or not self.audit(other.id)["valid"]
+                ):
+                    continue
+                analysis = other.payload["analysis"]
+                if analysis["chain"] != source_analysis["chain"]:
+                    continue
+                other_nodes = linkable(analysis)
+                for address in sorted(source_nodes.keys() & other_nodes.keys()):
+                    if address in {source_analysis["target"], analysis["target"]}:
+                        continue
+                    relationship = (
+                        source_nodes[address]
+                        if source_nodes[address] == other_nodes[address]
+                        else "shared observed outgoing/path address"
+                    )
+                    links.append(
+                        {
+                            "case_id": other.id,
+                            "address": address,
+                            "relationship": relationship,
+                        }
+                    )
+            return sorted(links, key=lambda item: (item["case_id"], item["address"]))
+
     def audit(self, case_id):
         with Session(self.engine) as session:
             case = session.get(CaseRecord, case_id)
@@ -127,11 +264,29 @@ class CaseStore:
                 ).encode()
             ).hexdigest()
             evidence_valid = calculated_digest == case.payload["evidence_digest"]
+            assessment_valid = self._assessment_valid(case.payload)
+            analysis_valid = self._analysis_valid(case.payload)
+            assessment_anchor_valid = (
+                not case.payload.get("audit_initialized", False)
+                or not self._anchor(case.payload)
+                or any(
+                    event.get("action") == "analysis_executed"
+                    and event.get("reference") == self._anchor(case.payload)
+                    for event in data
+                )
+            )
             return {
                 "events": data,
-                "valid": chain_valid and evidence_valid,
+                "valid": chain_valid
+                and evidence_valid
+                and assessment_valid
+                and analysis_valid
+                and assessment_anchor_valid,
                 "chain_valid": chain_valid,
                 "evidence_valid": evidence_valid,
+                "assessment_valid": assessment_valid,
+                "analysis_valid": analysis_valid,
+                "assessment_anchor_valid": assessment_anchor_valid,
                 "head_hash": data[-1]["audit_hash"] if data else None,
                 "historical_events_unavailable": not data,
             }

@@ -1,0 +1,123 @@
+{
+  "state": "final_cases_frozen",
+  "dataset": {
+    "filename": "labeled_addresses__enriched.csv",
+    "relative_path": "raw/labeled_addresses__enriched.csv",
+    "sha256": "579b42862499032390ea519da5aca00470643ca1c06bdd392f39c9af55e71157",
+    "total_rows": 10627,
+    "cex_endpoints": 370
+  },
+  "labels": {
+    "operational_count": 259,
+    "held_out_count": 111,
+    "operational_list_reference": "label_split.json, stratum=operational; backend/data/labels/ethereum_public_cex.json plus curated ethereum_vasps.json",
+    "held_out_list_reference": "label_split.json, stratum=held_out",
+    "split_sha256": "d65b5169fe08603b5ed80ffe41e4e3c01050f7de8cfcd0cf06f2b15cbd51ebba",
+    "operational_file_sha256": "6fbaceb364220a9901ab56d0baa210f5c0d8191d8c98b3748c37a2a42c536317",
+    "curated_file_sha256": "555c30fa1e36710642520122b64aae0e3f030a5d5bf251849d5d5371823ff724",
+    "conflicts_reference": "label_conflicts.json",
+    "conflicts_sha256": "7021577b15247826f85a8de2fd96780486023146351966ec94a5e035921ecbb0"
+  },
+  "seed": 2612026,
+  "case_eligibility": [
+    "Ethereum only",
+    "Published CEX endpoint in frozen dataset",
+    "Distinct non-zero source wallet not a published or operational VASP endpoint",
+    "Observed source-to-endpoint transfer in cached/live GoldRush recent endpoint page",
+    "Valid transaction hash, block and timestamp",
+    "One candidate per endpoint and source; no duplicate source/transaction",
+    "expected_hops=1",
+    "First-pilot source wallets excluded from discovery"
+  ],
+  "ambiguity_rule": "If retrieved source evidence contains direct transfers to multiple published or operational VASP entities, retain case as ambiguous and exclude it from conditional single-label accuracy; keep it in attempted and retrieval denominators.",
+  "conflict_rule": "If independently sourced labels assign different VASP entities to the same endpoint and the conflict cannot be independently resolved from the available evidence, that address is marked ground_truth_conflict and excluded from single-label accuracy metrics. Preserve and report it in all-case accounting.",
+  "sampling": {
+    "endpoint_discovery": "Deterministic round-robin by (operational/held-out stratum, entity), per-group seed shuffle; most recent eligible inbound transfer in observed page",
+    "final_selection": "If pool <100, stop. If 100-149, select all. If >=150, select exactly 150. Within each stratum, select entity-round-robin by discovery case ID; target 70% operational and 30% held-out, fill any shortage from deterministic round-robin of remaining cases. Do not filter conflicts or outcomes.",
+    "target_final_cases": 150,
+    "minimum_final_cases": 100,
+    "target_candidate_pool": 220
+  },
+  "implementation": {
+    "model_version": "0.1.0",
+    "engine_sha256": "91369fa152e4a85fa7b82b5d4171185e378dd565817aeea3f38cdc83e80b9f23",
+    "goldrush_sha256": "291954271acc2a00db85ddf70fbc8c95ef40785dbe587456e5cee0d7f63cfa2e",
+    "model_sha256": "1f0dd0fe3f34c762168a974b6474b6a332024796905c3937cdf29bac2a39f3b8",
+    "label_loader_sha256": "a5064c7f3e13048bd1d1ff8af90f4f91c649caf12d7ad85e7c10e20c38aa4afb",
+    "builder_sha256": "ac2ed43cab69c1c40913a28565e17c3813b98a990714f4528ca20504467b6448",
+    "common_sha256": "20ede2299fa4890984f04c86130d75d620a944aa08846d462c5093009745980c",
+    "selector_sha256": "2893b884430794748bda7afa787702a38e73135e0dd97e2b3a61edf7fb41bf1b",
+    "evaluator_sha256": "6077c9f0cafefb2bfa910dddf08dbad323ea9643b9595bf44d4e2aa2225891cf",
+    "weights": {
+      "proximity": 0.25,
+      "interaction": 0.25,
+      "independent_paths": 0.15,
+      "recency": 0.15,
+      "label_quality": 0.1,
+      "cluster_support": 0.1
+    },
+    "max_trace_operations": 100000,
+    "attribution_minimum_score": null,
+    "label_quality_missing_policy": "Unknown numeric confidence/reliability remains null; preexisting quality cap treats it as zero. No score weight changes.",
+    "sahyog_simulation_min_score": 60.0,
+    "sahyog_threshold_used_in_evaluation": false,
+    "goldrush_max_recent_pages": 5,
+    "goldrush_retry_delays_seconds": [
+      1,
+      2,
+      4
+    ]
+  },
+  "evaluator": {
+    "chain": "ethereum",
+    "mode": "live",
+    "max_hops": 4,
+    "production_components": [
+      "GoldRushProvider",
+      "load_labels",
+      "InvestigationRequest",
+      "analyze"
+    ],
+    "progress_file": "cache/final_evaluation_progress.jsonl",
+    "primary_denominator": "evaluable operational cases, excluding ambiguous, missing evidence, provider failures and ground-truth conflicts",
+    "all_case_denominator": "all fixed final cases; no replacements",
+    "nearest_vasp_accuracy": "not measurable without unique nearest service truth",
+    "real_world_negative_metrics": "not measured without independently verified negatives"
+  },
+  "git": {
+    "branch": "final-sih",
+    "reference": "e1bbc8964a1fcf99bcc0686113afec8a841fb1d8",
+    "uncommitted_worktree": true
+  },
+  "candidate_pool": {
+    "path": "case_pool.csv",
+    "sha256": "9285ca1dcf17c2b90fd0a5dcbd888a15de7aeb82ed86063697e2fa7c6da5889c",
+    "count": 220
+  },
+  "final_cases": {
+    "path": "final_cases.csv",
+    "sha256": "04e75a723b43833d760b3de9e7e8039bd2a92e5b1ba84b18931723a3e3787654",
+    "count": 150,
+    "operational": 105,
+    "held_out": 45,
+    "ground_truth_conflicts": 1,
+    "entities": {
+      "Binance": 13,
+      "Bitfinex": 13,
+      "Bithumb": 13,
+      "Bitstamp": 8,
+      "Bittrex": 3,
+      "Coinbase": 13,
+      "Crypto.com": 10,
+      "Gemini": 8,
+      "HitBTC": 4,
+      "Hotbit": 4,
+      "Huobi": 12,
+      "Kraken": 12,
+      "KuCoin": 11,
+      "OKX": 11,
+      "Poloniex": 11,
+      "Upbit": 4
+    }
+  }
+}
