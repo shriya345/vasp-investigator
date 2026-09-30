@@ -16,13 +16,16 @@ export type Transaction = {
 };
 export type Label = {
   address: string;
+  chain: string;
   entity: string;
   entity_type: string;
   confidence: number;
   strength: string;
   source: string;
+  source_url?: string | null;
   source_reliability: number;
   observed_at: string;
+  fiu_registered?: boolean | null;
   synthetic: boolean;
 };
 export type GraphNode = {
@@ -65,6 +68,9 @@ export type Analysis = {
   };
   transactions: Transaction[];
   candidates: Candidate[];
+  nearest_vasp?: Candidate | null;
+  highest_confidence_vasp?: Candidate | null;
+  attribution_result?: string;
   risk: {
     score: number;
     factors: {
@@ -91,6 +97,31 @@ export type CaseSummary = {
   chain: string;
   mode: string;
   created_at: string;
+};
+export type Routing = {
+  reference: string;
+  state: string;
+  case_reference: string;
+  investigating_agency: string;
+  candidate_entity: string;
+  candidate_score: number;
+  candidate_hops: number;
+  simulation_threshold: number;
+  notice: string;
+  legal_note: string;
+};
+export type Audit = {
+  valid: boolean;
+  head_hash: string | null;
+  historical_events_unavailable: boolean;
+  events: {
+    timestamp: string;
+    action: string;
+    audit_hash: string;
+    previous_hash: string | null;
+    evidence_digest: string;
+    reference: string | null;
+  }[];
 };
 export const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`;
 export const money = (n: number | null | undefined) =>

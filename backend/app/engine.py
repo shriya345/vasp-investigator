@@ -217,6 +217,14 @@ def _analyze(request: InvestigationRequest, transactions, labels):
             }
         )
     candidates.sort(key=lambda c: (-c["score"], c["entity"]))
+    # Only temporal, evidence-supported candidate paths reach this list. Keep the
+    # existing scoring and order; proximity is a separate question.
+    highest_confidence = candidates[0] if candidates else None
+    nearest = (
+        min(candidates, key=lambda c: (c["shortest_hops"], -c["score"], c["entity"]))
+        if candidates
+        else None
+    )
     risks = []
     for kind, title, points in [
         ("mixer", "Mixer exposure detected", 25),
@@ -338,6 +346,13 @@ def _analyze(request: InvestigationRequest, transactions, labels):
         },
         "transactions": serialized,
         "candidates": candidates,
+        "nearest_vasp": nearest,
+        "highest_confidence_vasp": highest_confidence,
+        "attribution_result": (
+            "Evidence-supported VASP candidates found."
+            if candidates
+            else "No VASP attribution supported by available evidence."
+        ),
         "risk": {"score": min(100, sum(r["points"] for r in risks)), "factors": risks},
         "metrics": {
             "incoming_usd": in_usd,

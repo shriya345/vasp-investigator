@@ -1,4 +1,5 @@
 import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -18,6 +19,13 @@ from .label_loader import load_labels
 from .models import Chain, InvestigationRequest, StrictModel
 from .providers import DEMO_TARGET, SyntheticProvider
 from .report import report
+from .routing import (
+    RoutingPreparation,
+    RoutingTransition,
+    confidence_threshold,
+    prepare,
+    SIMULATION_NOTICE,
+)
 from .storage import CaseStore
 
 
@@ -33,7 +41,11 @@ app = FastAPI(title="VASP Investigator", version="0.1.0", lifespan=lifespan)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "0.1.0", "live_ingestion": False}
+    return {
+        "status": "ok",
+        "version": "0.1.0",
+        "live_ingestion": bool(os.getenv("GOLDRUSH_API_KEY")),
+    }
 
 
 @app.get("/api/demo")
@@ -48,6 +60,11 @@ def list_cases():
 
 @app.post("/api/cases", status_code=201)
 def create_case(request: InvestigationRequest):
+    if request.mode == "live":
+        raise HTTPException(
+            422,
+            "Live cases must use /api/investigate so evidence is retrieved from GoldRush.",
+        )
     if request.mode == "demo":
         try:
             txs, labels = SyntheticProvider().fetch(request.target, request.chain)
@@ -71,6 +88,7 @@ def create_case(request: InvestigationRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "title": request.title,
         "evidence_digest": digest,
+        "audit_initialized": True,
         "evidence": evidence,
         "analysis": analysis,
     }
@@ -91,10 +109,14 @@ def get_case(case_id: str):
 
 
 @app.get("/api/cases/{case_id}/report", response_class=PlainTextResponse)
-def get_report(case_id: str):
+def get_report(case_id: str, download: bool = False):
     case = require_case(case_id)
+    try:
+        app.state.store.record_report(case_id, exported=download)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
     return PlainTextResponse(
-        report(case),
+        report(case, app.state.store.routing(case_id), app.state.store.audit(case_id)),
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{case["id"]}.md"'},
     )
@@ -138,7 +160,7 @@ def investigate(request: InvestigateRequest):
     inv_request = InvestigationRequest(
         target=request.target,
         chain=request.chain,
-        mode="import",
+        mode="live",
         max_hops=request.max_hops,
         title=request.title,
         transactions=txs,
@@ -160,8 +182,55 @@ def investigate(request: InvestigateRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "title": request.title,
         "evidence_digest": digest,
+        "audit_initialized": True,
         "evidence": evidence,
         "analysis": analysis,
     }
-    app.state.store.save(case)
+    app.state.store.save(case, live=True)
     return case
+
+
+@app.get("/api/simulation-policy")
+def simulation_policy():
+    try:
+        threshold = confidence_threshold()
+    except ValueError as exc:
+        raise HTTPException(503, str(exc))
+    return {
+        "notice": SIMULATION_NOTICE,
+        "minimum_score": threshold,
+        "meaning": "Configurable simulation rule only; not a legal or evidentiary standard.",
+    }
+
+
+@app.get("/api/cases/{case_id}/audit")
+def case_audit(case_id: str):
+    case = require_case(case_id)
+    audit = app.state.store.audit(case_id)
+    audit["historical_events_unavailable"] = not case.get("audit_initialized", False)
+    return {"case_id": case_id, "evidence_digest": case["evidence_digest"], **audit}
+
+
+@app.get("/api/cases/{case_id}/routing")
+def get_routing(case_id: str):
+    require_case(case_id)
+    return {"notice": SIMULATION_NOTICE, "routing": app.state.store.routing(case_id)}
+
+
+@app.post("/api/cases/{case_id}/routing", status_code=201)
+def prepare_routing(case_id: str, request: RoutingPreparation):
+    case = require_case(case_id)
+    try:
+        routing = prepare(case, request)
+        return app.state.store.prepare_routing(case, routing)
+    except ValueError as exc:
+        raise HTTPException(409 if "verification failed" in str(exc) else 422, str(exc))
+
+
+@app.post("/api/cases/{case_id}/routing/state")
+def transition_routing(case_id: str, request: RoutingTransition):
+    require_case(case_id)
+    try:
+        return app.state.store.transition_routing(case_id, request.state)
+    except ValueError as exc:
+        raise HTTPException(409 if "verification failed" in str(exc) else 422, str(exc))

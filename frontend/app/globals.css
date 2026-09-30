@@ -1341,3 +1341,164 @@ footer button {
     font-size: 9px;
   }
 }
+/* Small additions within the existing investigation layout. */
+.attribution-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 18px;
+  padding: 15px 20px;
+  gap: 18px;
+}
+.attribution-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.attribution-summary > div + div {
+  border-left: 1px solid var(--line);
+  padding-left: 18px;
+}
+.attribution-summary span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--purple);
+}
+.attribution-summary strong {
+  font-size: 15px;
+}
+.attribution-summary small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.attribution-summary > p {
+  font-size: 12px;
+  color: #865d31;
+}
+.candidate-flags {
+  display: flex !important;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.candidate-flags em {
+  font-size: 8px;
+  font-style: normal;
+  color: #6d5bbd;
+  background: #f1edfb;
+  border-radius: 3px;
+  padding: 3px 5px;
+}
+.label-source a {
+  display: inline-block;
+  color: var(--purple);
+  font-size: 10px;
+  margin: 0 0 7px;
+  text-decoration: underline;
+}
+.label-source span {
+  display: block;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.path-hashes {
+  font-family: monospace;
+  overflow-wrap: anywhere;
+}
+.simulation-panel,
+.integrity-panel {
+  margin-top: 20px;
+}
+.simulation-body {
+  padding: 0 21px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.simulation-body p {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.simulation-body form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.simulation-body form > label:not(.simulation-check) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(100%, 500px);
+  font-size: 10px;
+  color: #62718a;
+}
+.simulation-body form > label > input:not([type="checkbox"]) {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px;
+  max-width: 100%;
+}
+.simulation-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 10px;
+  color: #52627a;
+  line-height: 1.5;
+}
+.simulation-check input {
+  margin: 1px 0;
+}
+.simulation-result {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.simulation-result strong {
+  color: var(--purple);
+  font-size: 11px;
+}
+.simulation-result span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.simulation-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.simulation-body code {
+  overflow-wrap: anywhere;
+  font-size: 9px;
+}
+.audit-list {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.audit-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 9px;
+}
+.audit-list > div:last-child {
+  border: 0;
+}
+.audit-list span {
+  color: var(--muted);
+}
+@media (max-width: 650px) {
+  .attribution-summary {
+    grid-template-columns: 1fr;
+  }
+  .attribution-summary > div + div {
+    border: 0;
+    border-top: 1px solid var(--line);
+    padding: 12px 0 0;
+  }
+}

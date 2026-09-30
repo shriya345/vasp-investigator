@@ -2,6 +2,8 @@
 
 A runnable SIH 2026 prototype for explainable attribution of cryptocurrency fund flows to labelled service endpoints. It identifies **evidence-supported VASP candidates**, not people or wallet ownership.
 
+Intended investigator workflow: NCRP / LEA case context → suspect VDA wallet → Tracepoint → live blockchain intelligence → transaction tracing → risk and service detection → nearest VASP and highest-confidence comparison → evidence review → investigator review → lawful-basis gate → SAHYOG-ready **simulation** → report and case audit trail. There is no integration with I4C, NCRP or the live SAHYOG Portal, and no government endorsement is claimed.
+
 ## Installation
 
 ### Prerequisites
@@ -89,17 +91,17 @@ Use the sidebar's **Import evidence** button to load a pre-built investigation p
 - Normalized evidence contracts (chain, block ordering, contract-based token identity, duplicate-event rejection, timezone validation).
 
 ### VASP / risk label dataset
-- 18 verified Ethereum VASP addresses: Binance, Coinbase, Kraken, OKX, Bybit, KuCoin — sourced from Etherscan labels.
+- 18 sourced Ethereum VASP address labels: Binance, Coinbase, Kraken, OKX, Bybit, KuCoin — sourced from Etherscan labels.
 - 5 BNB Chain VASP addresses sourced from BscScan labels.
 - 5 Tornado Cash pool addresses (OFAC SDN-listed).
 - Polygon, Optimism, Avalanche bridges.
 - Uniswap V2/V3, SushiSwap DEX routers.
 - Sanctioned and scam addresses.
-- Every label carries source, source URL, confidence, source reliability, and verification date.
+- Curated label files carry source URLs, confidence, source reliability, and an observation timestamp. The loader preserves available URLs. These assertions still require independent manual verification. FIU-IND status is unknown for all current labels.
 
 ### Trace engine
 - Chronological, same-asset proportional tracing, hop limits, cycle boundaries, and conservative service endpoint stops.
-- Transparent six-component weighted attribution scores (proximity, interaction, independent paths, recency, label quality, cluster support) with evidence quality cap.
+- Transparent six-component weighted attribution scores (proximity, interaction, independent paths, recency, label quality, cluster support) with evidence quality cap. Nearest VASP uses shortest supported temporal path; highest-confidence VASP uses the unchanged score. Both are reported separately.
 - Rule-based risk signals: mixer, bridge, sanctions, scam, rapid layering, large-value transfer.
 - Valuation coverage, velocity, HHI and entropy metrics.
 
@@ -109,13 +111,13 @@ Use the sidebar's **Import evidence** button to load a pre-built investigation p
 - VASP attribution: component-level score breakdown with label provenance.
 - Risk & typology: evidence-linked risk factors and fund-flow statistics.
 - Transactions: searchable evidence table with per-transaction drawer.
-- Report: rendered Markdown report with SHA-256 evidence digest; downloadable.
+- Report: rendered Markdown report with nearest/highest-confidence results, evidence, case details when supplied, simulated routing and SHA-256 integrity references; downloadable.
 
 ### Persistence and export
 - SQLite (default) or PostgreSQL via `DATABASE_URL`.
 - Saved cases with title, chain, mode, target, and creation time.
 - Downloadable Markdown investigation report and JSON evidence bundle.
-- SHA-256 evidence digest for content comparison.
+- SHA-256 evidence digest for content comparison alongside timestamped, hash-chained case audit events. The audit view recomputes the evidence digest and verifies each event against its case and digest. Existing cases are not assigned historical events retroactively.
 
 ## Verify
 
@@ -130,7 +132,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Backend tests (24): engine correctness (conservation, ordering, contracts, dilution, boundaries, hop limits, label quality, cycles, complexity budget) and full API lifecycle. Frontend build and type-check run in CI. Browser tests cover demo analysis, candidate selection, graph filtering, evidence inspection, report download, imported no-evidence cases, persistence, and mobile viewport.
+Backend tests (32): engine correctness (conservation, ordering, contracts, dilution, boundaries, hop limits, label quality, cycles, complexity budget) and full API lifecycle. Frontend build and type-check run in CI. Browser tests cover demo analysis, candidate selection, graph filtering, evidence inspection, report download, imported no-evidence cases, persistence, and mobile viewport.
 
 ## Project structure
 
@@ -140,7 +142,9 @@ backend/app/providers.py     Provider interface and synthetic demo scenario
 backend/app/goldrush.py      GoldRush (Covalent) blockchain history provider
 backend/app/label_loader.py  Curated label dataset loader
 backend/app/engine.py        Tracing, attribution, risk and quantitative metrics
-backend/app/storage.py       SQLAlchemy case persistence
+backend/app/storage.py       SQLAlchemy case, simulation, and audit persistence
+backend/app/routing.py       Simulated routing gate and state transitions
+backend/app/audit.py         Hash-chained audit events and verification
 backend/app/report.py        Deterministic Markdown report
 backend/app/main.py          HTTP API (FastAPI)
 backend/data/labels/         Curated VASP, mixer, bridge, DEX, sanctions labels
@@ -166,6 +170,11 @@ docs/ROADMAP.md              Next implementation milestones
 | `GET` | `/api/cases/{id}` | Full stored case with analysis and evidence |
 | `GET` | `/api/cases/{id}/report` | Markdown report attachment |
 | `GET` | `/api/cases/{id}/evidence` | Normalized evidence, digest and analysis |
+| `GET` | `/api/cases/{id}/audit` | Audit events and hash-chain verification |
+| `GET` | `/api/simulation-policy` | Configured simulation threshold |
+| `GET` | `/api/cases/{id}/routing` | Current simulated routing state |
+| `POST` | `/api/cases/{id}/routing` | Prepare a gated simulated request |
+| `POST` | `/api/cases/{id}/routing/state` | Validated simulated state transition |
 
 ## PostgreSQL / containers
 
@@ -181,6 +190,7 @@ Runs PostgreSQL, the API and the dashboard. Set `DATABASE_URL=postgresql+psycopg
 |----------|----------|-------------|
 | `GOLDRUSH_API_KEY` | For live investigation | GoldRush (Covalent) API key |
 | `DATABASE_URL` | No | PostgreSQL connection string; defaults to SQLite |
+| `SAHYOG_SIMULATION_MIN_SCORE` | No | Score gate from 0–100; defaults to 60. This is a simulation rule, not a legal or evidentiary standard. |
 
 Never commit `backend/.env` to Git — it is excluded by `.gitignore`.
 
@@ -188,9 +198,15 @@ Never commit `backend/.env` to Git — it is excluded by `.gitignore`.
 
 This is a **local, single-investigator prototype**. It has no authentication, multi-user isolation, or production deployment hardening. Keep it on localhost. Do not expose it as a public service.
 
-Attribution scores are uncalibrated evidence scores, not ownership probabilities. No real-world owner is identified. VASP labels are sourced assertions — the application does not independently verify them. No freezing or disclosure requests are generated.
+Attribution scores are uncalibrated evidence scores, not ownership probabilities. Attribution represents an evidence-supported association and does not independently establish wallet ownership or criminal liability. VASP labels are sourced assertions requiring manual verification.
 
-The SHA-256 evidence digest permits content comparison; it is not a signature, immutable audit log, or proof that supplied transactions happened on-chain. SQLite files and `.env` are excluded from Git.
+**Implemented:** Ethereum/BNB GoldRush ingestion when an API key is configured, normalization, tracing, ranking, risk signals, provenance retention, reports, and local case/audit persistence. GoldRush currently retrieves the target address history and may not provide enough intermediary history for live multi-hop attribution. Provider and label facts have not been independently validated in this implementation.
+
+**SIMULATED — No connection to the live SAHYOG Portal:** A local workflow checks the selected candidate against the configured score gate, then requires a Case/FIR reference, agency, authorization confirmation, and investigator confirmation. It creates a simulated reference and supports prepared → sent → acknowledged → info_requested → complied/refused, with escalation after refusal. No real disclosure or freezing request is transmitted. BNSS Section 94 requires case-specific assessment and does not automatically authorize freezing.
+
+**Future work:** Manual verification of live transactions and source labels, verified FIU-IND regulatory data, broader provider coverage, and production security and deployment controls. No FIU registration status is inferred from an address label.
+
+The evidence digest and append-only application audit chain support tamper-evident evidence integrity / chain-of-custody review. Hashing alone does not authenticate external evidence or make it legally admissible. Existing cases display a legacy notice rather than fabricated earlier audit events. Database administrators could still replace an entire trail; this is not a production immutable log. SQLite files and `.env` are excluded from Git.
 
 See [methodology](docs/METHODOLOGY.md) for the full model description and limitations.
 

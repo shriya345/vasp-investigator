@@ -26,6 +26,8 @@ import {
   type Candidate,
   type GraphNode,
   type Transaction,
+  type Routing,
+  type Audit,
   short,
   money,
   time,
@@ -43,15 +45,20 @@ const tabs = [
   "Transactions",
   "Report",
 ];
+const allowedStates: Record<string, string[]> = {
+  prepared: ["sent"],
+  sent: ["acknowledged"],
+  acknowledged: ["info_requested", "complied", "refused"],
+  info_requested: ["complied", "refused"],
+  refused: ["escalated"],
+};
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
   if (!res.ok) {
-    const body = await res
-      .json()
-      .catch(() => ({
-        detail:
-          "The analysis service is unavailable. Start the backend and try again.",
-      }));
+    const body = await res.json().catch(() => ({
+      detail:
+        "The analysis service is unavailable. Start the backend and try again.",
+    }));
     throw new Error(
       typeof body.detail === "string"
         ? body.detail
@@ -73,8 +80,27 @@ export default function Dashboard() {
     [report, setReport] = useState("");
   const [query, setQuery] = useState(""),
     [showCases, setShowCases] = useState(false);
+  const [routing, setRouting] = useState<Routing | null>(null);
+  const [audit, setAudit] = useState<Audit | null>(null);
+  const [threshold, setThreshold] = useState<number | null>(null);
+  const [caseReference, setCaseReference] = useState("");
+  const [agency, setAgency] = useState("");
+  const [authorized, setAuthorized] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [routingBusy, setRoutingBusy] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const a = current?.analysis;
+  const nearest =
+    a?.nearest_vasp ??
+    (a?.candidates.length
+      ? [...a.candidates].sort(
+          (left, right) =>
+            left.shortest_hops - right.shortest_hops ||
+            right.score - left.score ||
+            left.entity.localeCompare(right.entity),
+        )[0]
+      : null);
+  const highest = a?.highest_confidence_vasp ?? a?.candidates[0] ?? null;
   useEffect(() => {
     api<CaseSummary[]>("/api/cases")
       .then(setCases)
@@ -95,6 +121,18 @@ export default function Dashboard() {
       });
     return () => controller.abort();
   }, [current]);
+  useEffect(() => {
+    if (!current) return;
+    api<{ routing: Routing | null }>(`/api/cases/${current.id}/routing`)
+      .then((data) => setRouting(data.routing))
+      .catch((e) => setError((e as Error).message));
+    api<Audit>(`/api/cases/${current.id}/audit`)
+      .then(setAudit)
+      .catch((e) => setError((e as Error).message));
+    api<{ minimum_score: number }>("/api/simulation-policy")
+      .then((data) => setThreshold(data.minimum_score))
+      .catch((e) => setError((e as Error).message));
+  }, [current]);
   function activate(c: Case) {
     setCurrent(c);
     setSelected(c.analysis.candidates[0] || null);
@@ -102,6 +140,66 @@ export default function Dashboard() {
     setTab("Overview");
     setWallet(c.analysis.target);
     setChain(c.analysis.chain);
+    setRouting(null);
+    setAudit(null);
+    setCaseReference("");
+    setAgency("");
+    setAuthorized(false);
+    setConfirmed(false);
+  }
+  async function refreshAudit(caseId: string) {
+    setAudit(await api<Audit>(`/api/cases/${caseId}/audit`));
+  }
+  async function refreshReport(caseId: string) {
+    const response = await fetch(`/api/cases/${caseId}/report`);
+    if (!response.ok) throw new Error("Report unavailable");
+    setReport(await response.text());
+    await refreshAudit(caseId);
+  }
+  async function prepareSimulation() {
+    if (!current || !selected) return;
+    setRoutingBusy(true);
+    setError("");
+    try {
+      const result = await api<Routing>(`/api/cases/${current.id}/routing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidate_entity: selected.entity,
+          case_reference: caseReference,
+          investigating_agency: agency,
+          authorized_investigation: authorized,
+          investigator_confirmed: confirmed,
+        }),
+      });
+      setRouting(result);
+      await refreshReport(current.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRoutingBusy(false);
+    }
+  }
+  async function changeSimulationState(state: string) {
+    if (!current) return;
+    setRoutingBusy(true);
+    setError("");
+    try {
+      const result = await api<Routing>(
+        `/api/cases/${current.id}/routing/state`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state }),
+        },
+      );
+      setRouting(result);
+      await refreshReport(current.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRoutingBusy(false);
+    }
   }
   async function investigate(payload?: unknown) {
     setBusy(true);
@@ -221,7 +319,12 @@ export default function Dashboard() {
             <span className="rank">0{i + 1}</span>
             <div className="candidate-name">
               <strong>{c.entity}</strong>
+              <span className="candidate-flags">
+                {nearest?.entity === c.entity && <em>Nearest VASP</em>}
+                {highest?.entity === c.entity && <em>Highest confidence</em>}
+              </span>
               <span>
+                {c.shortest_hops} hop{c.shortest_hops === 1 ? "" : "s"} ·{" "}
                 {money(c.traced_usd)} · {c.value_share}% of valued outflow
               </span>
               <div className="bar">
@@ -235,7 +338,9 @@ export default function Dashboard() {
           </button>
         ))
       ) : (
-        <p className="empty">No VASP endpoint is supported by this evidence.</p>
+        <p className="empty">
+          No VASP attribution supported by available evidence.
+        </p>
       )}
       <p className="panel-note">
         <CircleHelp size={14} />
@@ -255,6 +360,7 @@ export default function Dashboard() {
       <div className="evidence-grid">
         {[
           [selected.independent_paths, "Edge-disjoint paths"],
+          [`${selected.shortest_hops} hops`, "Nearest supported path"],
           [`${selected.median_hops} hops`, "Median distance"],
           [`${selected.value_share}%`, "Valued outflow"],
           [selected.addresses.length, "Labelled addresses"],
@@ -283,19 +389,188 @@ export default function Dashboard() {
         <ShieldCheck size={16} />
         Score capped at {selected.quality_cap} by evidence quality.
       </div>
+      <div className="label-source">
+        <strong>Supporting transaction paths</strong>
+        <p>
+          {selected.interaction_count} endpoint transfer
+          {selected.interaction_count === 1 ? "" : "s"}; last seen{" "}
+          {time(selected.last_seen)}.
+        </p>
+        {selected.paths.map((path, index) => (
+          <p key={index} className="path-hashes">
+            Path {index + 1}:{" "}
+            {path.map((id) => short(id.split(":")[1])).join(" → ")}{" "}
+            <span title={path.join(" → ")}>({path.length} hops)</span>
+          </p>
+        ))}
+      </div>
       {tab === "VASP attribution" &&
         selected.labels.map((l) => (
           <div className="label-source" key={l.address}>
             <strong>
-              {short(l.address)} · {l.strength} label
+              {short(l.address)} · {l.entity_type} · {l.chain} · {l.strength}{" "}
+              label
             </strong>
             <p>{l.source}</p>
+            {l.source_url && (
+              <a href={l.source_url} target="_blank" rel="noopener noreferrer">
+                Label source ↗
+              </a>
+            )}
             <span>
-              Observed {time(l.observed_at)} · Reliability{" "}
-              {l.source_reliability * 100}%
+              Address {l.address} · Observed {time(l.observed_at)} · Label
+              confidence {l.confidence * 100}% · Reliability{" "}
+              {l.source_reliability * 100}% · FIU-IND{" "}
+              {l.fiu_registered == null
+                ? "unknown — manual verification required"
+                : l.fiu_registered
+                  ? "registered"
+                  : "unregistered"}
             </span>
           </div>
         ))}
+    </section>
+  );
+  const routingPanel = a && (
+    <section className="card simulation-panel">
+      <div className="card-heading">
+        <div>
+          <h2>SAHYOG-ready routing simulation</h2>
+          <p>SIMULATED — No connection to the live SAHYOG Portal</p>
+        </div>
+      </div>
+      <div className="simulation-body">
+        <p>
+          Configurable simulation threshold:{" "}
+          {threshold == null ? "Loading" : `${threshold}/100`}. This is not a
+          legal or evidentiary standard.
+        </p>
+        {routing ? (
+          <>
+            <div className="simulation-result">
+              <strong>{routing.reference}</strong>
+              <span>
+                State: {routing.state.replaceAll("_", " ")} · Candidate:{" "}
+                {routing.candidate_entity} · {routing.candidate_score}/100
+              </span>
+            </div>
+            <p>{routing.legal_note}</p>
+            <div className="simulation-actions">
+              {(allowedStates[routing.state] || []).map((state) => (
+                <button
+                  className="button secondary"
+                  disabled={routingBusy}
+                  key={state}
+                  onClick={() => void changeSimulationState(state)}
+                >
+                  Mark {state.replaceAll("_", " ")} (simulated)
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void prepareSimulation();
+            }}
+          >
+            <p>
+              Selected candidate:{" "}
+              {selected
+                ? `${selected.entity} · ${selected.shortest_hops} hops · ${selected.score}/100`
+                : "No supported candidate selected"}
+            </p>
+            <label>
+              Case/FIR reference
+              <input
+                aria-label="Case/FIR reference"
+                required
+                maxLength={150}
+                value={caseReference}
+                onChange={(event) => setCaseReference(event.target.value)}
+              />
+            </label>
+            <label>
+              Investigating agency
+              <input
+                aria-label="Investigating agency"
+                required
+                maxLength={150}
+                value={agency}
+                onChange={(event) => setAgency(event.target.value)}
+              />
+            </label>
+            <label className="simulation-check">
+              <input
+                type="checkbox"
+                checked={authorized}
+                onChange={(event) => setAuthorized(event.target.checked)}
+              />{" "}
+              I confirm this forms part of an authorized investigation.
+            </label>
+            <label className="simulation-check">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />{" "}
+              I have reviewed the attribution evidence and confirm simulated
+              preparation.
+            </label>
+            <button
+              className="button primary"
+              disabled={routingBusy || !selected || threshold == null}
+            >
+              Prepare simulated request
+            </button>
+            <p>
+              BNSS Section 94 requires case-specific legal assessment and does
+              not automatically authorize freezing.
+            </p>
+          </form>
+        )}
+      </div>
+    </section>
+  );
+  const integrityPanel = a && (
+    <section className="card integrity-panel">
+      <div className="card-heading">
+        <div>
+          <h2>Evidence integrity / chain of custody</h2>
+          <p>Hash-linked case events for tamper-evident comparison</p>
+        </div>
+      </div>
+      <div className="simulation-body">
+        <p>
+          Evidence digest: <code>{current?.evidence_digest}</code>
+        </p>
+        <p>
+          Audit chain:{" "}
+          {audit ? (audit.valid ? "Valid" : "Verification failed") : "Loading"}{" "}
+          · Head hash: <code>{audit?.head_hash || "None"}</code>
+        </p>
+        {audit?.historical_events_unavailable && (
+          <p>
+            This case predates the audit trail. Earlier events were not
+            backfilled.
+          </p>
+        )}
+        <div className="audit-list">
+          {audit?.events.map((event, index) => (
+            <div key={`${event.audit_hash}-${index}`}>
+              <strong>{event.action.replaceAll("_", " ")}</strong>
+              <span>
+                {time(event.timestamp)} · {short(event.audit_hash)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p>
+          Hash chaining does not authenticate external evidence or establish
+          legal admissibility.
+        </p>
+      </div>
     </section>
   );
   const riskPanel = a && (
@@ -445,7 +720,7 @@ export default function Dashboard() {
               disabled={!current || !report}
               onClick={() => {
                 if (current)
-                  window.location.href = `/api/cases/${current.id}/report`;
+                  window.location.href = `/api/cases/${current.id}/report?download=true`;
               }}
             >
               <Download size={16} />
@@ -480,25 +755,42 @@ export default function Dashboard() {
               <option value="ethereum">Ethereum</option>
               <option value="bnb">BNB Chain</option>
             </select>
-            <button className="button primary" disabled={busy} onClick={(e) => {
-              e.preventDefault();
-              if (wallet === DEMO) {
-                void investigate();
-              } else {
-                void investigateLive();
-              }
-            }}>
-              {busy ? <LoaderCircle className="spin" size={17} /> : <GitBranch size={17} />}{" "}
-              {busy ? "Analyzing…" : wallet === DEMO ? "Run demo" : "Investigate live"}
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={(e) => {
+                e.preventDefault();
+                if (wallet === DEMO) {
+                  void investigate();
+                } else {
+                  void investigateLive();
+                }
+              }}
+            >
+              {busy ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <GitBranch size={17} />
+              )}{" "}
+              {busy
+                ? "Analyzing…"
+                : wallet === DEMO
+                  ? "Run demo"
+                  : "Investigate live"}
             </button>
           </form>
           <div className="demo-notice">
             <span className="badge amber">SYNTHETIC DEMO</span>
             <span>
-              The demo address runs a synthetic scenario. Enter any other EVM address to run a live investigation via GoldRush, or{" "}
-              <button onClick={() => importRef.current?.click()} disabled={busy}>
+              The demo address runs a synthetic scenario. Enter any other EVM
+              address to run a live investigation via GoldRush, or{" "}
+              <button
+                onClick={() => importRef.current?.click()}
+                disabled={busy}
+              >
                 import normalized evidence
-              </button>.
+              </button>
+              .
             </span>
           </div>
           <input
@@ -576,8 +868,10 @@ export default function Dashboard() {
                   </span>
                   <span className="badge">
                     {a.mode === "demo"
-                      ? "Synthetic evidence"
-                      : "Imported evidence"}
+                      ? "SYNTHETIC DEMO"
+                      : a.mode === "live"
+                        ? "LIVE BLOCKCHAIN TRACE"
+                        : "IMPORT"}
                   </span>
                 </div>
                 <small>{time(current!.created_at)}</small>
@@ -627,6 +921,32 @@ export default function Dashboard() {
                   <small>{a.risk.factors.length} evidence-backed signals</small>
                 </div>
               </div>
+              <div className="attribution-summary card">
+                {nearest && highest ? (
+                  <>
+                    <div>
+                      <span>NEAREST VASP</span>
+                      <strong>{nearest.entity}</strong>
+                      <small>
+                        {nearest.shortest_hops} hop
+                        {nearest.shortest_hops === 1 ? "" : "s"} ·{" "}
+                        {nearest.score}/100 confidence
+                      </small>
+                    </div>
+                    <div>
+                      <span>HIGHEST-CONFIDENCE VASP</span>
+                      <strong>{highest.entity}</strong>
+                      <small>
+                        {highest.shortest_hops} hop
+                        {highest.shortest_hops === 1 ? "" : "s"} ·{" "}
+                        {highest.score}/100 confidence
+                      </small>
+                    </div>
+                  </>
+                ) : (
+                  <p>No VASP attribution supported by available evidence.</p>
+                )}
+              </div>
               <nav className="tabs" aria-label="Investigation views">
                 {tabs.map((t) => (
                   <button
@@ -655,14 +975,18 @@ export default function Dashboard() {
               )}
               {tab === "Transaction graph" && graph}
               {tab === "VASP attribution" && (
-                <div className="two-column">
-                  {candidatePanel}
-                  {evidencePanel || (
-                    <div className="card empty">
-                      Select a candidate to inspect the model.
-                    </div>
-                  )}
-                </div>
+                <>
+                  <div className="two-column">
+                    {candidatePanel}
+                    {evidencePanel || (
+                      <div className="card empty">
+                        Select a candidate to inspect the model.
+                      </div>
+                    )}
+                  </div>
+                  {routingPanel}
+                  {integrityPanel}
+                </>
               )}
               {tab === "Risk & typology" && (
                 <>
@@ -771,23 +1095,27 @@ export default function Dashboard() {
                 </section>
               )}
               {tab === "Report" && (
-                <section className="card report">
-                  <div className="card-heading">
-                    <div>
-                      <h2>Investigation report</h2>
-                      <p>Generated from stored evidence · No LLM inference</p>
+                <>
+                  <section className="card report">
+                    <div className="card-heading">
+                      <div>
+                        <h2>Investigation report</h2>
+                        <p>Generated from stored evidence · No LLM inference</p>
+                      </div>
+                      <a
+                        className="button secondary"
+                        href={`/api/cases/${current!.id}/evidence`}
+                        download={`${current!.id}-evidence.json`}
+                      >
+                        <Download size={15} />
+                        Evidence JSON
+                      </a>
                     </div>
-                    <a
-                      className="button secondary"
-                      href={`/api/cases/${current!.id}/evidence`}
-                      download={`${current!.id}-evidence.json`}
-                    >
-                      <Download size={15} />
-                      Evidence JSON
-                    </a>
-                  </div>
-                  <pre>{report || "Preparing report…"}</pre>
-                </section>
+                    <pre>{report || "Preparing report…"}</pre>
+                  </section>
+                  {routingPanel}
+                  {integrityPanel}
+                </>
               )}
               <footer>
                 <ShieldCheck size={15} />
@@ -796,7 +1124,9 @@ export default function Dashboard() {
                   ownership.{" "}
                   {a.mode === "demo"
                     ? "All transactions and labels shown are synthetic."
-                    : "Imported labels require independent validation."}
+                    : a.mode === "live"
+                      ? "Live results depend on provider coverage and labels require validation."
+                      : "Imported labels require independent validation."}
                 </span>
                 <button onClick={() => setTab("Report")}>
                   Methodology & limitations <ChevronRight size={13} />

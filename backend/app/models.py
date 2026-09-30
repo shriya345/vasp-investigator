@@ -79,9 +79,23 @@ class Label(StrictModel):
     confidence: float = Field(ge=0, le=1)
     strength: str = Field(pattern=r"^(strong|probable|weak)$")
     source: str = Field(min_length=1, max_length=300)
+    source_url: Optional[str] = Field(
+        default=None, max_length=500, pattern=r"^https://"
+    )
     source_reliability: float = Field(ge=0, le=1)
     observed_at: datetime
+    # Entity-level regulatory status is separate from address ownership evidence.
+    fiu_registered: Optional[bool] = None
     synthetic: bool = False
+
+    @field_validator("fiu_registered")
+    @classmethod
+    def no_unverified_fiu_status(cls, value):
+        if value is not None:
+            raise ValueError(
+                "FIU-IND status requires a verified registry source; current datasets do not provide one"
+            )
+        return value
 
     @field_validator("address")
     @classmethod
@@ -99,7 +113,7 @@ class Label(StrictModel):
 class InvestigationRequest(StrictModel):
     target: str = Field(pattern=r"^0x[a-fA-F0-9]{40}$")
     chain: Chain = Chain.ethereum
-    mode: str = Field(default="demo", pattern=r"^(demo|import)$")
+    mode: str = Field(default="demo", pattern=r"^(demo|import|live)$")
     max_hops: int = Field(default=4, ge=1, le=6)
     transactions: list[Transaction] = Field(default_factory=list, max_length=5000)
     labels: list[Label] = Field(default_factory=list, max_length=1000)
@@ -124,6 +138,6 @@ class InvestigationRequest(StrictModel):
         addresses = [label.address for label in self.labels]
         if len(addresses) != len(set(addresses)):
             raise ValueError("conflicting or duplicate address labels")
-        if self.mode == "import" and any(label.synthetic for label in self.labels):
+        if self.mode != "demo" and any(label.synthetic for label in self.labels):
             raise ValueError("synthetic labels are only permitted in demo mode")
         return self

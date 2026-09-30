@@ -12,8 +12,20 @@ from .models import Chain, Label
 DATA_DIR = Path(__file__).parent.parent / "data" / "labels"
 
 LABEL_FILES = {
-    Chain.ethereum: ["ethereum_vasps.json", "mixers.json", "bridges.json", "dex.json", "scams.json"],
-    Chain.bnb: ["bnb_vasps.json", "mixers.json", "bridges.json", "dex.json", "scams.json"],
+    Chain.ethereum: [
+        "ethereum_vasps.json",
+        "mixers.json",
+        "bridges.json",
+        "dex.json",
+        "scams.json",
+    ],
+    Chain.bnb: [
+        "bnb_vasps.json",
+        "mixers.json",
+        "bridges.json",
+        "dex.json",
+        "scams.json",
+    ],
 }
 
 
@@ -35,8 +47,6 @@ def load_labels(chain: Chain) -> list[Label]:
             # Override chain to match requested chain (mixer/bridge/dex files are chain-agnostic)
             record = dict(record)
             record["chain"] = chain.value
-            # Remove fields not in the Label model (e.g. source_url from label files)
-            record.pop("source_url", None)
             address = record.get("address", "").lower()
             if not address or address in seen_addresses:
                 continue

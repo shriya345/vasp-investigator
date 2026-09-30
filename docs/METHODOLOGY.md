@@ -50,3 +50,21 @@ Incoming/outgoing/net USD use only supplied valued target transfers, excluding s
 ## Reproducibility
 
 Cases store raw normalized evidence, source metadata, analysis, model version and SHA-256 of compact sorted-key UTF-8 JSON evidence. Evidence array order is included in the digest. Reports cite the digest and event-level paths. A digest is a content fingerprint, not independently authenticated provenance. The demo uses a fixed period for deterministic outputs.
+
+## Nearest and highest-confidence results
+
+Only candidates reached by supported, chronological paths are considered. Nearest VASP is the candidate with the smallest `shortest_hops`; ties favor the higher existing score, then entity name. Highest-confidence VASP is the first candidate in the existing score ranking. This does not change the six-component formula. If there are no candidates, all outputs explicitly say: **No VASP attribution supported by available evidence.** A low-scoring candidate may still be displayed for review but cannot pass a higher simulated routing threshold.
+
+## Label and regulatory information
+
+The existing `Label` model retains source, optional HTTPS source URL, reliability, confidence and observation time. Observation time is not proof of external verification. The current repository has no reliable FIU-IND registration dataset; `fiu_registered` remains null, and non-null submissions are rejected until a verified source and review process exist. Regulatory status would be entity-level context, never evidence of address ownership.
+
+## Lawful-basis and SAHYOG simulation
+
+**SIMULATED — No connection to the live SAHYOG Portal.** Preparation requires a supported candidate whose existing score meets `SAHYOG_SIMULATION_MIN_SCORE` (default 60/100), plus a nonblank Case/FIR reference, investigating agency, explicit authorized-investigation confirmation and investigator confirmation. The threshold is a configurable simulation rule, not a legal or evidentiary standard. BNSS Section 94 must be considered in the circumstances of a case and does not automatically authorize freezing.
+
+The local state machine permits prepared → sent → acknowledged → info_requested → complied or refused; acknowledged may also move directly to complied/refused; refused → escalated. States and references are fictional. No external request is sent. Invalid transitions are rejected.
+
+## Audit integrity
+
+Every new case receives creation and analysis events; live cases also receive a live evidence retrieval event. Reviewed/prepared routing, each simulated state transition and report generation append timestamped events with case ID, evidence digest, reference, previous hash and SHA-256 current hash. The append path verifies the existing chain first. Cases created before this feature have no fabricated historical events; subsequent real actions can begin a chain with a legacy warning. Verification detects changes to retained events but does not prevent replacement of an entire database trail, authenticate upstream blockchain evidence, or make material legally admissible.

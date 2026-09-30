@@ -35,3 +35,9 @@ Only successful transfers on the selected chain should be included. Record API c
 - `GET /api/cases/{id}/evidence`: normalized evidence, digest and analysis.
 
 The frontend forwards `/api/*` to the local FastAPI service. `API_URL` configures the upstream when the frontend builds. The API does not enable cross-origin browser access by default.
+
+## Provenance and simulation endpoints
+
+`Label` also accepts optional `source_url` (HTTPS). Current datasets do not substantiate FIU-IND registration; `fiu_registered` must be null or omitted. A non-null value is rejected. `observed_at` dates the label assertion; it is not a certified verification date.
+
+`POST /api/investigate` stores `mode: live`; imported cases use `mode: import`. `GET /api/simulation-policy` exposes the configured illustrative score threshold. `POST /api/cases/{id}/routing` requires `candidate_entity`, `case_reference`, `investigating_agency`, `authorized_investigation: true`, and `investigator_confirmed: true`. `GET /api/cases/{id}/routing` reads the local simulation; `POST /api/cases/{id}/routing/state` accepts an allowed next `state`. `GET /api/cases/{id}/audit` returns the hash-linked event trail and verification result. No endpoint connects to the live SAHYOG Portal.
